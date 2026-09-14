@@ -70,6 +70,8 @@ Datasource connection is configurable via env vars:
 `WRITE_DB_URL`, `WRITE_DB_USERNAME`, `WRITE_DB_PASSWORD`, `READ_DB_URL`, `READ_DB_USERNAME`, `READ_DB_PASSWORD`.
 
 ### Example
+
+**1. Ingest an order event** (`POST /api/v1/order-events`)
 ```bash
 curl -i -X POST http://localhost:8080/api/v1/order-events \
   -H 'Content-Type: application/json' \
@@ -77,13 +79,51 @@ curl -i -X POST http://localhost:8080/api/v1/order-events \
     "order_id": "b6ac61c0-5c7d-45a3-8b89-6b8020f8b937",
     "event_type": "ORDER_CREATED",
     "timestamp": "2026-09-02T00:34:56Z",
+    "created_by": "local-user",
     "user_id": "0e7fc15e-04c0-4e72-960e-7706f580e172",
+    "status": "CREATED",
+    "future_field": "preserved unchanged",
     "order_lines": [
-      { "order_line_seq": "1", "status": "CREATED", "sku": "SKU-001", "quantity": 2 }
+      {
+        "order_line_seq": "1",
+        "status": "CREATED",
+        "sku": "SKU-001",
+        "productName": "Example item",
+        "quantity": 2,
+        "price": 49.99
+      }
     ]
   }'
+```
+Returns `201 Created` with an acknowledgement:
+```json
+{ "eventId": "…", "receivedTimestamp": "…", "status": "ACCEPTED" }
+```
+Required fields are `order_id` and `event_type` (omitting either returns `400`).
 
+**2. Advance the order** — post a later event for the same `order_id`:
+```bash
+curl -i -X POST http://localhost:8080/api/v1/order-events \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "order_id": "b6ac61c0-5c7d-45a3-8b89-6b8020f8b937",
+    "event_type": "ORDER_SHIPPED",
+    "timestamp": "2026-09-03T10:00:00Z",
+    "user_id": "0e7fc15e-04c0-4e72-960e-7706f580e172",
+    "order_lines": [ { "order_line_seq": "1", "status": "SHIPPED" } ]
+  }'
+```
+
+**3. Query the read model**
+```bash
+# list all orders
+curl http://localhost:8080/api/v1/orders
+
+# get one order (with timeline + items)
 curl http://localhost:8080/api/v1/orders/b6ac61c0-5c7d-45a3-8b89-6b8020f8b937
+
+# items under an order
+curl http://localhost:8080/api/v1/orders/b6ac61c0-5c7d-45a3-8b89-6b8020f8b937/items
 ```
 
 ## Test
