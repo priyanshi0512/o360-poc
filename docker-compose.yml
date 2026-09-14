@@ -1,0 +1,63 @@
+# Docker setup for the o360 CQRS stack — physically separated stores.
+#   - write-db (o360_write, port 5433): order_events  (write store / source of truth)
+#   - read-db  (o360_read,  port 5434): orders, order_items  (read/projection store)
+# The app runs a Flyway migration per datasource on startup.
+
+services:
+  write-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: o360_write
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - write-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d o360_write"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5433:5432"
+
+  read-db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: o360_read
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+    volumes:
+      - read-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d o360_read"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    ports:
+      - "5434:5432"
+
+  app:
+    build:
+      context: .
+    environment:
+      WRITE_DB_URL: jdbc:postgresql://write-db:5432/o360_write
+      WRITE_DB_USERNAME: postgres
+      WRITE_DB_PASSWORD: postgres
+      READ_DB_URL: jdbc:postgresql://read-db:5432/o360_read
+      READ_DB_USERNAME: postgres
+      READ_DB_PASSWORD: postgres
+      ARCHIVE_WAREHOUSE: /archive
+    depends_on:
+      write-db:
+        condition: service_healthy
+      read-db:
+        condition: service_healthy
+    ports:
+      - "8080:8080"
+    volumes:
+      - "${ARCHIVE_LOCAL_PATH:-./o360-archive}:/archive:rw"
+
+volumes:
+  write-db-data:
+  read-db-data:
+
