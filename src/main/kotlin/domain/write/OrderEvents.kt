@@ -38,5 +38,12 @@ class OrderEvent(
     var createdBy: String,
 
     @Column(name = "created_at", nullable = false)
-    var createdAt: Instant
+    var createdAt: Instant,
+
+    /**
+     * Optional client-supplied idempotency key. When present it is unique, so retries
+     * of the same logical event collapse to a single stored event. Null = not deduplicated.
+     */
+    @Column(name = "event_id", unique = true)
+    var eventId: UUID? = null
 )

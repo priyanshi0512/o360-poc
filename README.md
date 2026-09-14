@@ -51,6 +51,12 @@ GET /api/v1/orders/{id}/items ─┘
 
 Required event fields: `order_id`, `event_type`.
 
+### Idempotency
+Include an optional **`event_id`** (UUID) in the event payload to make ingestion idempotent.
+It is stored under a `UNIQUE` constraint on `order_events`, so retries/duplicates of the same
+`event_id` collapse to a **single** stored event and return the **original** acknowledgement
+(the event is projected only once). Omit `event_id` to keep the previous, non-deduplicated behaviour.
+
 ## Run
 
 ### With Docker (both databases + app)
@@ -76,6 +82,7 @@ Datasource connection is configurable via env vars:
 curl -i -X POST http://localhost:8080/api/v1/order-events \
   -H 'Content-Type: application/json' \
   -d '{
+    "event_id": "11111111-1111-1111-1111-111111111111",
     "order_id": "b6ac61c0-5c7d-45a3-8b89-6b8020f8b937",
     "event_type": "ORDER_CREATED",
     "timestamp": "2026-09-02T00:34:56Z",
@@ -99,7 +106,7 @@ Returns `201 Created` with an acknowledgement:
 ```json
 { "eventId": "…", "receivedTimestamp": "…", "status": "ACCEPTED" }
 ```
-Required fields are `order_id` and `event_type` (omitting either returns `400`).
+Posting the same `event_id` again returns the **same** acknowledgement (idempotent — no duplicate event).
 
 **2. Advance the order** — post a later event for the same `order_id`:
 ```bash

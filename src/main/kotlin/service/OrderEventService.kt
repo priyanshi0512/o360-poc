@@ -3,6 +3,7 @@ package com.ikea.o360.service
 import com.ikea.o360.domain.write.OrderEvent
 import com.ikea.o360.dto.OrderEventAcknowledgement
 import com.ikea.o360.repository.write.OrderEventRepository
+import org.springframework.dao.DataIntegrityViolationException
 import org.springframework.stereotype.Service
 import tools.jackson.databind.JsonNode
 import java.time.Instant
@@ -21,10 +22,17 @@ class OrderEventService(
 ) {
 
     fun create(request: JsonNode): OrderEventAcknowledgement {
-        // Extract the required fields from the incoming JSON payload
+        // Validate & extract the required fields from the incoming JSON payload.
         val eventType = request.requiredText("event_type")
-        val orderId = UUID.fromString(request.requiredText("order_id"))
+        val orderId = request.requiredUuid("order_id")
+        // Optional fields: validate their format only if present (keep raw-event tolerance).
+        request.optionalUuid("user_id")
         val createdBy = request.optionalText("created_by") ?: "system"
+        // Optional idempotency key: if we've already stored this event, return the original ack.
+        val eventId = request.optionalUuid("event_id")
+        if (eventId != null) {
+            orderEventRepository.findByEventId(eventId)?.let { return it.toAcknowledgement() }
+        }
 
         val now = Instant.now()
         // Business event time comes from the payload; fall back to ingestion time.
@@ -38,24 +46,33 @@ class OrderEventService(
             timestamp = eventTime,
             payload = request.toString(),
             createdBy = createdBy,
-            createdAt = now
+            createdAt = now,
+            eventId = eventId
         )
 
         // Persist to the order_events table (write store) — committed here.
-        val saved = orderEventRepository.save(orderEvent)
+        val saved = try {
+            orderEventRepository.save(orderEvent)
+        } catch (ex: DataIntegrityViolationException) {
+            // Lost a race: another request stored the same idempotency key concurrently.
+            eventId?.let { orderEventRepository.findByEventId(it) }?.let { return it.toAcknowledgement() }
+            throw ex
+        }
 
         // Hand off only the event id; the coordinator loads it and updates the read store.
         projectionCoordinator.process(saved.randomId)
 
-        return OrderEventAcknowledgement(
-            eventId = saved.randomId,
-            receivedTimestamp = saved.createdAt
-        )
+        return saved.toAcknowledgement()
     }
+
+    private fun OrderEvent.toAcknowledgement() =
+        OrderEventAcknowledgement(eventId = randomId, receivedTimestamp = createdAt)
 
     private fun JsonNode.requiredText(field: String): String {
         val value = this.get(field)
-        require(value != null && !value.isNull) { "Missing required field: '$field'" }
+        require(value != null && !value.isNull && value.asString().isNotBlank()) {
+            "Missing or blank required field: '$field'"
+        }
         return value.asString()
     }
 
@@ -63,6 +80,20 @@ class OrderEventService(
         val value = this.get(field)
         return if (value == null || value.isNull) null else value.asString()
     }
+
+    private fun JsonNode.requiredUuid(field: String): UUID = parseUuid(field, requiredText(field))
+
+    private fun JsonNode.optionalUuid(field: String): UUID? {
+        val text = optionalText(field) ?: return null
+        return parseUuid(field, text)
+    }
+
+    private fun parseUuid(field: String, text: String): UUID =
+        try {
+            UUID.fromString(text)
+        } catch (ex: IllegalArgumentException) {
+            throw IllegalArgumentException("Field '$field' must be a valid UUID, got '$text'")
+        }
 
     private fun JsonNode.optionalInstant(field: String): Instant? {
         val text = optionalText(field) ?: return null

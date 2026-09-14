@@ -8,5 +8,8 @@ interface OrderEventRepository : JpaRepository<OrderEvent, UUID> {
 
     /** Full event history for an order, chronologically (ties broken by id) — used by replay. */
     fun findByOrderIdOrderByTimestampAscRandomIdAsc(orderId: UUID): List<OrderEvent>
+
+    /** Idempotency lookup: find a previously-stored event by its client-supplied key. */
+    fun findByEventId(eventId: UUID): OrderEvent?
 }
 

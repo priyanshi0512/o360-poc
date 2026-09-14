@@ -5,6 +5,8 @@ import com.ikea.o360.service.OrderEventService
 import com.ikea.o360.service.OrderQueryService
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertThrows
+import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -34,6 +36,9 @@ class OrderFlowIntegrationTest {
 
     @Autowired
     lateinit var orderQueryService: OrderQueryService
+
+    @Autowired
+    lateinit var orderEventRepository: com.ikea.o360.repository.write.OrderEventRepository
 
     private val json = JsonMapper.builder().build()
 
@@ -105,6 +110,47 @@ class OrderFlowIntegrationTest {
 
         val order = orderQueryService.getOrder(orderId)
         assertEquals(OrderStatus.SHIPPED, order.status)
+    }
+
+    @Test
+    fun `rejects an event missing the required event_type`() {
+        val request = json.readTree("""{ "order_id": "${UUID.randomUUID()}" }""")
+        val ex = assertThrows(IllegalArgumentException::class.java) {
+            orderEventService.create(request)
+        }
+        assertTrue(ex.message!!.contains("event_type"), "message was: ${ex.message}")
+    }
+
+    @Test
+    fun `rejects an event with a malformed order_id`() {
+        val request = json.readTree(
+            """{ "order_id": "not-a-uuid", "event_type": "ORDER_CREATED" }"""
+        )
+        val ex = assertThrows(IllegalArgumentException::class.java) {
+            orderEventService.create(request)
+        }
+        assertTrue(ex.message!!.contains("valid UUID"), "message was: ${ex.message}")
+    }
+
+    @Test
+    fun `duplicate event_id is idempotent - stored once, same acknowledgement`() {
+        val orderId = UUID.randomUUID()
+        val eventId = UUID.randomUUID()
+        val body = """
+            { "event_id": "$eventId", "order_id": "$orderId", "event_type": "ORDER_CREATED",
+              "timestamp": "2026-09-02T00:00:00Z", "user_id": "${UUID.randomUUID()}",
+              "order_lines": [ { "order_line_seq": "1", "status": "CREATED" } ] }
+        """.trimIndent()
+
+        val first = orderEventService.create(json.readTree(body))
+        val second = orderEventService.create(json.readTree(body))
+
+        // Same acknowledgement returned both times (no new event created).
+        assertEquals(first.eventId, second.eventId)
+        assertEquals(first.receivedTimestamp, second.receivedTimestamp)
+
+        // Only one event actually persisted for this order.
+        assertEquals(1, orderEventRepository.findByOrderIdOrderByTimestampAscRandomIdAsc(orderId).size)
     }
 
     companion object {
