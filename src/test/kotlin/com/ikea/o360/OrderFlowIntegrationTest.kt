@@ -1,6 +1,5 @@
 package com.ikea.o360
 
-import com.ikea.o360.domain.OrderStatus
 import com.ikea.o360.service.OrderEventService
 import com.ikea.o360.service.OrderQueryService
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -73,7 +72,7 @@ class OrderFlowIntegrationTest {
         val order = orderQueryService.getOrder(orderId)
         assertEquals(orderId, order.orderId)
         assertEquals(userId, order.userId)
-        assertEquals(OrderStatus.CREATED, order.status)
+        assertEquals("CREATED", order.status)
         // Raw payload is preserved in the timeline (including unknown fields).
         assertEquals("preserved unchanged", order.timeline.get("future_field").asString())
 
@@ -109,7 +108,7 @@ class OrderFlowIntegrationTest {
         )
 
         val order = orderQueryService.getOrder(orderId)
-        assertEquals(OrderStatus.SHIPPED, order.status)
+        assertEquals("SHIPPED", order.status)
     }
 
     @Test

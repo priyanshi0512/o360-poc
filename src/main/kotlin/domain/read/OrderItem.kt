@@ -27,7 +27,7 @@ class OrderItem(
     var orderItemSequence: Int,
 
     @Column(name = "status", nullable = false)
-    var status: String,
+    var status: String = "ACTIVE",
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "order_details", nullable = false, columnDefinition = "jsonb")

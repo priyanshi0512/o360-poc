@@ -1,6 +1,5 @@
 package com.ikea.o360.dto
 
-import com.ikea.o360.domain.OrderStatus
 import tools.jackson.databind.JsonNode
 import java.time.Instant
 import java.util.UUID
@@ -12,7 +11,7 @@ import java.util.UUID
 data class OrderSummaryResponse(
     val orderId: UUID,
     val userId: UUID,
-    val status: OrderStatus,
+    val status: String,
     val createdTimestamp: Instant,
     val lastUpdatedTimestamp: Instant
 )
@@ -27,7 +26,7 @@ data class OrderItemResponse(
 data class OrderResponse(
     val orderId: UUID,
     val userId: UUID,
-    val status: OrderStatus,
+    val status: String,
     val createdTimestamp: Instant,
     val lastUpdatedTimestamp: Instant,
     val timeline: JsonNode,

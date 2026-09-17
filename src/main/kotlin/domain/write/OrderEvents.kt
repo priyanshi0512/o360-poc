@@ -25,7 +25,7 @@ class OrderEvent(
     var orderId: UUID,
 
     @Column(name = "event_type", nullable = false)
-    var eventType: String,
+    var eventType: String = "ORDER_CREATED",
 
     @Column(name = "timestamp", nullable = false)
     var timestamp: Instant,

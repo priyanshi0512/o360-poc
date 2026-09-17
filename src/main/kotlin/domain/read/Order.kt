@@ -1,11 +1,8 @@
 package com.ikea.o360.domain.read
-import com.ikea.o360.domain.OrderStatus
 
 import jakarta.persistence.CascadeType
 import jakarta.persistence.Column
 import jakarta.persistence.Entity
-import jakarta.persistence.EnumType
-import jakarta.persistence.Enumerated
 import jakarta.persistence.Id
 import jakarta.persistence.OneToMany
 import jakarta.persistence.Table
@@ -31,9 +28,8 @@ class Order(
     @Column(name = "last_updated_timestamp", nullable = false)
     var lastUpdatedTimestamp: Instant,
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false)
-    var status: OrderStatus,
+    var status: String = "CREATED",
 
     @JdbcTypeCode(SqlTypes.JSON)
     @Column(name = "timeline", nullable = false, columnDefinition = "jsonb")
